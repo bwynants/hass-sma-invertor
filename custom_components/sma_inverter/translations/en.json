@@ -1,0 +1,206 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "SMA inverter",
+        "description": "Modbus TCP must be enabled on the inverter. Unit 3 answers reads and writes; unit 2 is where a few read-only registers live.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "framer": "Framer",
+          "unit_id": "Unit ID (reads and writes)",
+          "unit_id_alt": "Second unit ID (read-only registers)"
+        }
+      },
+      "reconfigure": {
+        "title": "SMA inverter",
+        "description": "Change the inverter's address.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "framer": "Framer",
+          "unit_id": "Unit ID (reads and writes)",
+          "unit_id_alt": "Second unit ID (read-only registers)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "No inverter answered on that address, port and unit ID."
+    },
+    "abort": {
+      "already_configured": "This inverter is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "SMA settings",
+        "description": "Maximum power is the reference for every limit that gets written, so an incorrect value scales them all. Compare it with the 'WMax' sensor, which reads the inverter's own value (the 'Nominal PV power' register reports 0 on the Sunny Boy Smart Energy and cannot be used for this). The fallback timeout also sets the heartbeat period, at half its value.",
+        "data": {
+          "pmax_watt": "Maximum power (W)",
+          "fallback_timeout_seconds": "Fallback timeout (s)"
+        }
+      }
+    }
+  },
+  "selector": {
+    "framer": {
+      "options": {
+        "socket": "Socket (Modbus TCP)",
+        "rtu": "RTU over TCP"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "pv_power": {
+        "name": "PV power"
+      },
+      "ac_power": {
+        "name": "AC power"
+      },
+      "total_yield": {
+        "name": "Total yield"
+      },
+      "apparent_power": {
+        "name": "Apparent power"
+      },
+      "reactive_power": {
+        "name": "Reactive power"
+      },
+      "ac_voltage": {
+        "name": "Grid voltage"
+      },
+      "ac_current": {
+        "name": "Grid current"
+      },
+      "grid_frequency": {
+        "name": "Grid frequency"
+      },
+      "operating_mode": {
+        "name": "Operating mode",
+        "state": {
+          "external_setpoint": "External setpoint (1079)",
+          "percent_of_wmax": "Percent of WMax (1078, not written)",
+          "watt": "Watt (1077, not written)",
+          "off": "Off (303)",
+          "unreadable": "Unreadable"
+        }
+      },
+      "limit_source": {
+        "name": "Limit source",
+        "state": {
+          "none": "Not limited",
+          "active_power_setpoint": "Our setpoint (2357)",
+          "active_power_setpoint_2": "Active power setpoint 2",
+          "p_f_curve": "P(f) curve",
+          "p_v_curve": "P(V) curve",
+          "infeed_limit": "Infeed limit",
+          "fcr": "Frequency containment reserve",
+          "integral_local_frequency": "Integral local frequency",
+          "unbalanced_power_limitation": "Unbalanced power limitation",
+          "unreadable": "Unreadable"
+        }
+      },
+      "power_limit_applied": {
+        "name": "Limit applied"
+      },
+      "fallback_mode": {
+        "name": "Fallback mode",
+        "state": {
+          "use_fallback": "Use fallback (2507)",
+          "maintain_values": "Maintain values (2506)",
+          "unreadable": "Unreadable"
+        }
+      },
+      "fallback_timeout": {
+        "name": "Fallback timeout"
+      },
+      "condition": {
+        "name": "Condition",
+        "state": {
+          "ok": "OK",
+          "warning": "Warning",
+          "fault": "Fault",
+          "off": "Off",
+          "unreadable": "Unreadable"
+        }
+      },
+      "derating": {
+        "name": "Derating",
+        "state": {
+          "not_active": "Not active",
+          "none": "None",
+          "temperature": "Temperature",
+          "wmax_derating": "WMax derating",
+          "frequency": "Frequency",
+          "pv_current_limitation": "PV current limitation",
+          "unreadable": "Unreadable"
+        }
+      },
+      "message": {
+        "name": "Message code"
+      },
+      "available_power": {
+        "name": "Available power"
+      },
+      "nominal_pv_power": {
+        "name": "Nominal PV power"
+      },
+      "nominal_power_ok": {
+        "name": "Nominal power (OK state)"
+      },
+      "wmax": {
+        "name": "WMax"
+      }
+    },
+    "binary_sensor": {
+      "readback_unusable": {
+        "name": "Readback unusable"
+      },
+      "fallback_not_armed": {
+        "name": "No safe fallback"
+      },
+      "modbus_down": {
+        "name": "Modbus link down"
+      }
+    },
+    "number": {
+      "power_limit": {
+        "name": "Power limit"
+      }
+    },
+    "switch": {
+      "heartbeat": {
+        "name": "Heartbeat"
+      }
+    },
+    "select": {
+      "target_mode": {
+        "name": "Target operating mode",
+        "state": {
+          "external_setpoint": "External setpoint (1079)",
+          "off": "Off (303)"
+        }
+      },
+      "target_fallback_mode": {
+        "name": "Target fallback mode",
+        "state": {
+          "use_fallback": "Use fallback (2507)",
+          "maintain_values": "Maintain values (2506)"
+        }
+      }
+    },
+    "button": {
+      "write_operating_mode": {
+        "name": "Write operating mode (flash)"
+      },
+      "write_fallback_config": {
+        "name": "Write fallback config (flash)"
+      },
+      "refresh_diagnostics": {
+        "name": "Refresh diagnostics"
+      }
+    }
+  }
+}

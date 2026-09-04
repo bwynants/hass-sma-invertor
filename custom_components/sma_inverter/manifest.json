@@ -1,0 +1,20 @@
+{
+  "domain": "sma_inverter",
+  "name": "SMA Inverter (Modbus)",
+  "codeowners": [
+    "@bwynants"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/bwynants/hass-sma-invertor",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/bwynants/hass-sma-invertor/issues",
+  "loggers": [
+    "sma_modbus",
+    "modbus_connection"
+  ],
+  "requirements": [
+    "modbus-connection[pymodbus]>=4.10,<5"
+  ],
+  "version": "0.1.0"
+}

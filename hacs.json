@@ -1,0 +1,5 @@
+{
+  "name": "SMA Inverter (Modbus)",
+  "render_readme": true,
+  "homeassistant": "2026.9.0"
+}
