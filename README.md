@@ -4,9 +4,7 @@ A Home Assistant integration for SMA hybrid inverters over Modbus TCP, built the
 way the [Modbus modernization post][post] asks for: a **device library** that owns
 the protocol knowledge, and a thin integration that wires it to entities.
 
-Developed against a **Sunny Boy Smart Energy 5.0** (ennexOS generation). It is a
-port of the 1300-line YAML package in `configuration/packages/sma.yaml` — 21
-individually-timed Modbus sensors, 5 template problem sensors and 4 automations.
+Developed against a **Sunny Boy Smart Energy 5.0** (ennexOS generation). 
 
 [post]: https://developers.home-assistant.io/blog/2026/07/05/modernizing-modbus/
 
@@ -86,7 +84,7 @@ watt-to-percent conversion — lives in `coordinator.py`.
 
 ### What the register map knows
 
-Everything the YAML package learned the hard way, now in one place:
+Everything that YAML package learned the hard way, now in one place:
 
 - **All registers are HOLDING registers** (FC03). There is no input-register map.
 - **Two unit ids.** Reads answer on unit 2 *and* 3, but writing to 40016 works
