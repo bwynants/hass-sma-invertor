@@ -1,8 +1,9 @@
 """The SMA Inverter (Modbus) integration.
 
-Owns a Modbus connection to the inverter (see `connection.py`), wraps two unit
-handles in the vendored `sma_modbus` device library, and adds the curtailment
-policy the device library deliberately does not have.
+Borrows two unit handles on a Modbus connection the Modbus integration shares
+between integrations (see `connection.py`), wraps them in the vendored
+`sma_modbus` device library, and adds the curtailment policy the device
+library deliberately does not have.
 
 WHAT THIS REPLACES: a YAML package of 21 individually-timed Modbus sensors,
 five template problem sensors and four automations. The register knowledge that
@@ -15,12 +16,17 @@ from __future__ import annotations
 
 import logging
 
+from homeassistant.components.modbus import async_get_unit
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import (
+    ConfigEntryError,
+    ConfigEntryNotReady,
+    HomeAssistantError,
+)
 
-from .connection import create_modbus_connection
+from .connection import build_modbus_params
 from .const import (
     CONF_UNIT_ID,
     CONF_UNIT_ID_ALT,
@@ -48,22 +54,33 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmaConfigEntry) -> bool:
     """Set up an SMA inverter from a config entry."""
     settings = {**entry.data, **entry.options}
     try:
-        connection = create_modbus_connection(settings)
-        # Two handles over ONE socket: unit 3 answers reads and writes, unit 2
-        # is where a few read-only registers are documented. Requests across
-        # both are serialized by the connection, which is what SS7.2 wants.
-        unit3 = connection.for_unit(int(settings.get(CONF_UNIT_ID, DEFAULT_UNIT_ID)))
-        unit2 = connection.for_unit(
-            int(settings.get(CONF_UNIT_ID_ALT, DEFAULT_UNIT_ID_ALT))
-        )
+        params = build_modbus_params(settings)
+        unit_id = int(settings.get(CONF_UNIT_ID, DEFAULT_UNIT_ID))
+        unit_id_alt = int(settings.get(CONF_UNIT_ID_ALT, DEFAULT_UNIT_ID_ALT))
     except (KeyError, TypeError, ValueError) as err:
         raise ConfigEntryNotReady(
             f"The SMA config entry has no usable connection data: {err}"
         ) from err
 
-    # Closing the link is the last thing to happen on unload, after the
-    # platforms and the coordinator have stopped using it.
-    entry.async_on_unload(connection.close)
+    # The Modbus integration owns the connection: it opens on first use, is
+    # shared with any other integration describing the same device, and
+    # closes when the last config entry holding a unit on it unloads. Each
+    # hold's release is registered on this entry by async_get_unit itself, so
+    # there is nothing to close here.
+    #
+    # Two holds over ONE socket: the shared integration keys connections by
+    # device, so both units ride the same link. Unit 3 answers reads and
+    # writes, unit 2 is where a few read-only registers are documented, and
+    # requests across both are serialized by the connection - which is what
+    # SS7.2 wants.
+    try:
+        unit3 = async_get_unit(hass, entry, params, unit_id)
+        unit2 = async_get_unit(hass, entry, params, unit_id_alt)
+    except HomeAssistantError as err:
+        # Another entry holds this device over different link settings. That
+        # is a configuration clash, not a transient fault: it wants a
+        # reconfiguration rather than a retry.
+        raise ConfigEntryError(str(err)) from err
 
     coordinator = SmaCoordinator(hass, entry, SmaModbusDevice(unit3=unit3, unit2=unit2))
     await coordinator.async_config_entry_first_refresh()
@@ -87,13 +104,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmaConfigEntry) -> bool:
 
     # A dropped link invalidates the limit we asserted on the inverter - and
     # after a fallback timeout the inverter is back at 100% while the slider
-    # still means something lower - so reload to re-assert it once the link is
-    # back. Home Assistant is the authority on the limit, not the inverter.
-    entry.async_on_unload(
-        unit3.on_connection_lost(
-            lambda: hass.config_entries.async_schedule_reload(entry.entry_id)
-        )
-    )
+    # still means something lower. Home Assistant is the authority on the
+    # limit, not the inverter. The connection is shared and reconnects on its
+    # own, so the entry is NOT reloaded for it (that would churn a connection
+    # other integrations may hold); the coordinator re-asserts the limit once
+    # polling succeeds again.
+    entry.async_on_unload(unit3.on_connection_lost(coordinator.mark_connection_lost))
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 

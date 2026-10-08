@@ -1,9 +1,10 @@
 """Config and options flow for the SMA Inverter (Modbus) integration.
 
-The integration owns its Modbus link (see `connection.py`), so the user gives
-the inverter's address here rather than picking a shared connection. Each entry
-is probed before it is created, so a wrong host, port or unit id is reported in
-the form instead of failing later at setup.
+The user gives the inverter's address here; the Modbus integration shares one
+connection between every entry describing the same device (see
+`connection.py`), so there is no hub to pick. Each entry is probed before it
+is created, so a wrong host, port or unit id is reported in the form instead
+of failing later at setup.
 
 TWO UNIT IDs are asked for, which is unusual and deliberate. On this inverter
 reads answer on either unit, but writes to 40016 only work on unit 3, and a
@@ -14,17 +15,18 @@ may differ.
 
 from __future__ import annotations
 
-from contextlib import suppress
 from typing import Any
 
 import voluptuous as vol
+from homeassistant.components.modbus import async_get_temporary_unit
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
     OptionsFlow,
 )
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.selector import (
     NumberSelector,
     NumberSelectorConfig,
@@ -36,7 +38,7 @@ from homeassistant.helpers.selector import (
 )
 from modbus_connection import ModbusError
 
-from .connection import create_modbus_connection
+from .connection import build_modbus_params
 from .const import (
     CONF_FALLBACK_TIMEOUT,
     CONF_FRAMER,
@@ -120,20 +122,26 @@ def _options_schema(options: dict[str, Any]) -> vol.Schema:
     )
 
 
-async def _async_probe(data: dict[str, Any]) -> bool:
-    """Whether an SMA inverter answers with these connection settings."""
-    connection = None
+async def _async_probe(hass: HomeAssistant, data: dict[str, Any]) -> str | None:
+    """Probe the inverter; return an error key, or None when it answered.
+
+    Borrows a temporary unit from the Modbus integration, so a connection a
+    config entry already holds on this device is shared rather than fought
+    over, and one opened just for the probe is closed on exit.
+    """
     try:
-        connection = create_modbus_connection(data)
-        unit = connection.for_unit(int(data[CONF_UNIT_ID]))
-        await SmaModbusDevice.async_probe(unit)
+        params = build_modbus_params(data)
+        unit_id = int(data[CONF_UNIT_ID])
+        async with async_get_temporary_unit(hass, params, unit_id) as unit:
+            await SmaModbusDevice.async_probe(unit)
+    except HomeAssistantError:
+        # The device is already held over different link settings, which one
+        # connection cannot honour. A different error, so the user is sent to
+        # the framing rather than to the cable.
+        return "link_conflict"
     except (ModbusError, OSError, ValueError):
-        return False
-    finally:
-        if connection is not None:
-            with suppress(ModbusError, OSError):
-                await connection.close()
-    return True
+        return "cannot_connect"
+    return None
 
 
 def _connection_data(user_input: dict[str, Any]) -> dict[str, Any]:
@@ -165,9 +173,9 @@ class SmaInverterConfigFlow(ConfigFlow, domain=DOMAIN):
             )
             self._abort_if_unique_id_configured()
 
-            if await _async_probe(data):
+            if (error := await _async_probe(self.hass, data)) is None:
                 return self.async_create_entry(title="SMA", data=data)
-            errors["base"] = "cannot_connect"
+            errors["base"] = error
 
         return self.async_show_form(
             step_id="user",
@@ -186,9 +194,9 @@ class SmaInverterConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             data = _connection_data(user_input)
-            if await _async_probe(data):
+            if (error := await _async_probe(self.hass, data)) is None:
                 return self.async_update_reload_and_abort(entry, data=data)
-            errors["base"] = "cannot_connect"
+            errors["base"] = error
 
         return self.async_show_form(
             step_id="reconfigure",

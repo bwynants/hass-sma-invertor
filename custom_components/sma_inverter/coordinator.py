@@ -7,6 +7,8 @@ the single place that issues writes, so nothing races:
   * the mode gate: nothing is written unless the inverter is really in 1079
   * the heartbeat, at a period derived from the inverter's fallback timeout
   * Home-Assistant-is-boss re-assert of the limit on setup and on reconnect
+    (re-asserted in place: the Modbus connection is shared, so a drop never
+    reloads the entry)
   * the flash-protected configuration writes, spaced per SS7.2
   * link health, for the connectivity sensor
 
@@ -92,6 +94,8 @@ class SmaCoordinator(DataUpdateCoordinator[SmaData]):
         self._heartbeat_cancel = None
         self._last_write: datetime | None = None
         self._last_success: datetime | None = None
+        # Set when the link drops; the next successful poll re-asserts the limit.
+        self._reassert_pending = False
 
     # -- tunables -----------------------------------------------------------
     @property
@@ -150,6 +154,13 @@ class SmaCoordinator(DataUpdateCoordinator[SmaData]):
         except SmaModbusError as err:
             raise UpdateFailed(str(err)) from err
         self._last_success = dt_util.utcnow()
+        if self._reassert_pending:
+            self._reassert_pending = False
+            # Not eager: let the coordinator publish this poll first, so
+            # the mode gate in the re-assert sees the fresh readback.
+            self.hass.async_create_task(
+                self.async_reassert_policy(), eager_start=False
+            )
         return data
 
     async def async_refresh_diagnostics(self) -> None:
@@ -165,6 +176,31 @@ class SmaCoordinator(DataUpdateCoordinator[SmaData]):
             _LOGGER.error("SMA: reading the diagnostic registers failed: %s", err)
             return
         self.async_set_updated_data(data)
+
+    # -- reconnect ----------------------------------------------------------
+    @callback
+    def mark_connection_lost(self) -> None:
+        """Note that the link dropped, so the limit is re-asserted once it is back.
+
+        The connection belongs to the Modbus integration, is shared with any
+        other entry on the same device and reconnects on its own, so a drop
+        must not reload this entry. What a drop invalidates is the limit: after
+        a fallback timeout the inverter is back at 100% while the slider still
+        means something lower, and that is put back after the next successful
+        poll.
+        """
+        self._reassert_pending = True
+
+    async def async_reassert_policy(self) -> None:
+        """Re-assert the limit after a reconnect, if Home Assistant wants one.
+
+        Nothing to hold when the slider is at PMAX; otherwise the write goes
+        through the usual mode gate, so an inverter not in 1079 is left alone.
+        """
+        if not self.curtailing:
+            return
+        _LOGGER.info("SMA: the link is back - re-asserting the power limit")
+        await self.async_write_setpoint()
 
     # -- the setpoint -------------------------------------------------------
     @property

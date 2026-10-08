@@ -25,7 +25,8 @@
       }
     },
     "error": {
-      "cannot_connect": "No inverter answered on that address, port and unit ID."
+      "cannot_connect": "No inverter answered on that address, port and unit ID.",
+      "link_conflict": "This device is already in use by another integration with different link settings (framing). Use the same settings here, or change them there."
     },
     "abort": {
       "already_configured": "This inverter is already configured."

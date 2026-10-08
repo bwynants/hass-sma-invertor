@@ -82,6 +82,27 @@ The library is backend-neutral (pymodbus, tmodbus, or the in-memory mock) and
 holds no policy. Curtailment policy — the mode gate, the heartbeat, the
 watt-to-percent conversion — lives in `coordinator.py`.
 
+### Connection ownership
+
+The core Modbus integration owns the connection. Since Home Assistant 2026.9 it hands
+out units over connections it shares between integrations (`async_get_unit`, see the
+[Modbus developer docs](https://developers.home-assistant.io/docs/modbus/introduction)),
+and the old `get_hub` path is
+[deprecated](https://developers.home-assistant.io/blog/2026/09/02/modbus-get-hub-deprecation/).
+This integration describes the inverter's link in `connection.py` and asks for two
+units on it — unit 3 and unit 2 ride the same socket, and requests across both are
+serialized behind its lock, which is what SS7.2 wants. Any other integration describing
+the same inverter lands on that socket too.
+
+The connection opens on first use and reconnects on its own, so an inverter whose
+Modbus server is down overnight does not fail setup. It closes when the last entry
+holding a unit on it unloads. A dropped link does **not** reload the entry — that would
+churn a connection other integrations may hold — the coordinator re-asserts the limit
+after the next successful poll instead.
+
+RTU over TCP is described the way the Modbus integration canonicalises it: serial params
+over a `socket://host:port` device.
+
 ### What the register map knows
 
 Everything that YAML package learned the hard way, now in one place:

@@ -5,6 +5,9 @@
     "@bwynants"
   ],
   "config_flow": true,
+  "dependencies": [
+    "modbus"
+  ],
   "documentation": "https://github.com/bwynants/hass-sma-invertor",
   "integration_type": "device",
   "iot_class": "local_polling",
@@ -14,7 +17,7 @@
     "modbus_connection"
   ],
   "requirements": [
-    "modbus-connection[pymodbus]>=4.10,<5"
+    "modbus-connection>=4.12,<5"
   ],
-  "version": "0.1.0"
+  "version": "0.2.0"
 }
